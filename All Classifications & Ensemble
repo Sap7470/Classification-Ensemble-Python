@@ -45,7 +45,7 @@ warnings.filterwarnings('ignore')
 # In[119]:
 
 
-df= pd.read_excel("/Users/saptarshichakraberty/Downloads/redatascientistroleatadp/CaseSTudy_2_data.xlsx")
+df= pd.read_excel("/Users/saptarshichakraberty/Downloads/CaseSTudy_2_data.xlsx")
 print(df.shape) # 49420 datapoints with 17 independent variables and Lead _Form_submission as target#
 
 print(df.columns)
