@@ -1,0 +1,579 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# # Importing Packages
+
+# In[118]:
+
+
+#! python3 -m pip install libsvm-official
+#! python3 -m pip install xgboost
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import matplotlib.pylab as pylab
+
+from sklearn import svm, tree, linear_model, neighbors, naive_bayes, ensemble, discriminant_analysis, gaussian_process
+from sklearn import feature_selection
+from sklearn import model_selection
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.svm import SVC
+
+from sklearn.neural_network import MLPClassifier
+
+from sklearn import metrics
+from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
+from sklearn.model_selection import train_test_split
+from xgboost import XGBClassifier
+
+
+get_ipython().run_line_magic('matplotlib', 'inline')
+mpl.style.use('ggplot')
+sns.set_style('white')
+pylab.rcParams['figure.figsize'] = 12,8
+import warnings
+warnings.filterwarnings('ignore')
+
+
+# # Data Loading and Exploration
+
+# In[119]:
+
+
+df= pd.read_excel("/Users/saptarshichakraberty/Downloads/redatascientistroleatadp/CaseSTudy_2_data.xlsx")
+print(df.shape) # 49420 datapoints with 17 independent variables and Lead _Form_submission as target#
+
+print(df.columns)
+df.head(5)
+
+
+# In[120]:
+
+
+print(df.info()) # object: Channel_Grouping (Paid Search for all, *drop),  device_category, non_shopper, user_type #
+df.describe()
+
+
+# # Checking Missing Values
+
+# In[121]:
+
+
+print("Number of null values in the data set are - ",df.isnull().values.any().sum())
+# No Missing Values
+
+
+# In[122]:
+
+
+print(df['Lead _Form_submission'].value_counts())  #0: 47615, 1: 1805 #
+
+print(df['device_category'].value_counts()) #device_category (Desktop: 26938, Mobile: 20253, Tablet: 2229)
+print(df['non_shopper'].value_counts()) # non_shopper (Y: 3556, N: 45864)
+print(df['user_type'].value_counts()) # user_type( New Visitor: 40571, Returning Visitor: 8849)
+#df.columns
+
+
+# # Dropping unnecessary columns
+
+# In[123]:
+
+
+## Avg_session_duration = session_Duration / sessions :::::: Direct functional relation so We are dropping session_Duration
+### pageviews= Pages_session * sessions :::::::: We are dropping pageviews 
+df_original= df
+drop_column = ['Visitor_Identifier','Channel_Grouping', 'session_duration','pageviews']
+df = df.drop(drop_column, axis=1)
+df.shape # (49420, 14) #
+
+
+# # Some plots
+
+# In[124]:
+
+
+#df.describe()
+df[df['Lead _Form_submission']== 0]['Avg_Session_Duration'].hist(alpha= 0.2)
+df[df['Lead _Form_submission']== 1]['Avg_Session_Duration'].hist(alpha= 0.7)
+plt.legend(["Y= 0", "Y= 1"])
+plt.show()
+
+sns.countplot(df[df['Lead _Form_submission']== 0]['device_category'])
+plt.show()
+sns.countplot(df[df['Lead _Form_submission']== 1]['device_category'])
+plt.show()
+
+sns.relplot(x= 'avg_time_on_page', y= 'Pages_Session', data= df, kind= 'scatter', hue= 'Lead _Form_submission', alpha= 0.3)
+plt.show()
+
+
+print(df[df['Lead _Form_submission']== 0]['device_category'].value_counts()) #0: 25874, 1:19588, 2: 2153
+print(df[df['Lead _Form_submission']== 1]['device_category'].value_counts())#0: 1064, 1: 665, 2: 76 #
+
+
+# # Finding Patterns
+
+# Adding an extra derived column: deciles of avg_time_on_page
+
+# In[125]:
+
+
+df['avg_time_deciles']= pd.cut(df['avg_time_on_page'], 10, labels = False)
+print(df['avg_time_deciles'].value_counts())
+
+print(df[df['avg_time_deciles']==0]['avg_time_on_page'].describe())
+print('-'*10)
+print(df[df['avg_time_deciles']==1]['avg_time_on_page'].describe())
+df[df['avg_time_deciles']==0]['user_type'].value_counts()
+
+
+# Adding an extra derived column: deciles of Avg_Session_Duration
+
+# In[126]:
+
+
+df['avg_session_deciles']= pd.cut(df['Avg_Session_Duration'], 10, labels = False)
+print(df['avg_session_deciles'].value_counts())
+print('-'*10)
+print(df[df['avg_session_deciles']==0]['avg_time_on_page'].describe())
+print('-'*10)
+print(df[df['avg_session_deciles']==1]['avg_time_on_page'].describe())
+df.shape # (49420, 16) #
+df.columns
+
+
+# # Removing extreme values
+
+# In[127]:
+
+
+## Ref: Pivot Tables (~99% of the data for upto decile 3 in all categories of devices
+## for both avg_session_deciles and 'avg_time_deciles'
+df_up= df[(df['avg_session_deciles'].isin([0,1,2])) & (df['avg_time_deciles'].isin([0,1,2]))] 
+df_up.shape # (49215, 16); 99.59% of the total data point retained #
+
+
+# # Checking Correlations:
+
+# Dropping the deciles
+
+# In[128]:
+
+
+df_final= df_up.drop(['avg_session_deciles','avg_time_deciles'], axis= 1)
+print(df_final.shape) # (49316, 14) #
+df_final['Lead _Form_submission'].value_counts() # 0s: 47449, 1s: 1766 , initially 1s: 1805
+
+
+# In[129]:
+
+
+df= df_final
+print(df.corrwith(df_final['Lead _Form_submission']))
+sns.heatmap(df.corr(),
+           vmax= 1, vmin= -1, center= 0,
+           cmap= sns.diverging_palette(20,220, n= 200),
+           annot= True)
+
+
+# # Hypotheses Testings (For Future Research)
+
+# Testing equality of Means:
+
+# In[130]:
+
+
+print(df_final[df_final['Lead _Form_submission']== 0]['Avg_Session_Duration'].mean()) 
+print(df_final[df_final['Lead _Form_submission']== 1]['Avg_Session_Duration'].mean()) 
+print(df_final[df_final['Lead _Form_submission']== 0]['Avg_Session_Duration'].std()) 
+print(df_final[df_final['Lead _Form_submission']== 1]['Avg_Session_Duration'].std()) 
+
+
+# In[131]:
+
+
+print(df_final[df_final['Lead _Form_submission']== 0]['avg_time_on_page'].mean()) 
+print(df_final[df_final['Lead _Form_submission']== 1]['avg_time_on_page'].mean()) 
+print(df_final[df_final['Lead _Form_submission']== 0]['avg_time_on_page'].std()) 
+print(df_final[df_final['Lead _Form_submission']== 1]['avg_time_on_page'].std()) 
+
+
+# Testing of equality of proportions:
+
+# In[133]:
+
+
+print(df_final[df_final['Lead _Form_submission']== 0]['user_type'].value_counts()) 
+#0    39007, 1     8522 : 1 is Return visitor-------total: 47529
+# prop_of_1 in df0 = 8522/ 47529 = 17.93%
+
+print(df_final[df_final['Lead _Form_submission']== 1]['user_type'].value_counts()) 
+#0    1502, 1     285 -----------total: 1787
+#prop_of_1 in df1= 285/1787= 15.95%
+
+
+# # Prepping for Modeling
+
+# Final data missing value check:
+
+# In[134]:
+
+
+print("Number of null values in the data set are - ",df.isnull().values.any().sum())
+
+
+# Encoding Object variables 
+
+# In[135]:
+
+
+#CONVERT: convert objects to category using Label Encoder for train and test/validation dataset
+
+#code categorical data
+label = LabelEncoder()
+df['device_category']= label.fit_transform(df['device_category'])
+df['non_shopper']= label.fit_transform(df['non_shopper'])
+df['user_type']= label.fit_transform(df['user_type'])
+df.sample(10)
+
+
+# # Transforming variables:
+
+# In[136]:
+
+
+sns.distplot(df.Avg_Session_Duration,bins=20) ## Right-skewed #
+plt.show()
+sns.distplot(df.avg_time_on_page,bins=20) # Right_skewed # 
+plt.show()
+sns.distplot(df.Session_1plus_minute,bins=5)
+plt.show()
+
+
+# Log-transformation to the variables (Could not do as very high amt of 0s for the features)
+# Try sqrt transformation
+
+# In[137]:
+
+
+# df['Session_1plus_minute'] = np.sqrt(df['Session_1plus_minute'])
+
+df['Avg_Session_Duration'] = np.log((df['Avg_Session_Duration']+1)) 
+df['avg_time_on_page'] = np.log((df['avg_time_on_page']+1))
+#df['Session_1plus_minute'] = np.log(df['Session_1plus_minute']) # log(0)?? #'''
+
+
+# In[138]:
+
+
+sns.distplot(df.Avg_Session_Duration,bins=20) ## Right-skewed #
+plt.show()
+sns.distplot(df.avg_time_on_page,bins=20) # Right_skewed # 
+plt.show()
+#sns.distplot(df.Session_1plus_minute,bins=5)
+#plt.show()
+
+
+# In[139]:
+
+
+sns.heatmap(df.corr(),
+           vmax= 1, vmin= -1, center= 0,
+           cmap= sns.diverging_palette(20,220, n= 200),
+           annot= True)
+
+
+# Test Train split etc
+
+# In[140]:
+
+
+#print(df.sample(10))
+Target = ['Lead _Form_submission']
+X= df.drop('Lead _Form_submission', axis= 1)
+y= df['Lead _Form_submission']
+X_train, X_test, y_train, y_test= model_selection.train_test_split(X, y, test_size= 0.3, random_state= 1)
+
+
+print(X_train.shape) # (34450, 13) #
+print('-'*20)
+print(X_test.shape) # (14765, 13) #
+X.columns
+
+
+# Standardization:
+
+# In[141]:
+
+
+sc= StandardScaler()
+X_train= sc.fit_transform(X_train)
+X_test= sc.transform(X_test)
+print(X_train.shape) # (34450, 13) #
+print(X_test.shape) # (14765, 13) #
+#X.columns
+
+
+# # Balancing the data
+
+# In[142]:
+
+
+##### SMOTE for balancing the data ####
+from imblearn.over_sampling import SMOTE
+print("Before OverSampling, counts of label '1': {}".format(sum(y_train == 1)))
+print("Before OverSampling, counts of label '0': {} \n".format(sum(y_train == 0)))
+  
+#oversampling the train dataset using SMOTE
+smt = SMOTE()
+#X train, y train = smt.fit resample(X train, y_ train)
+X_train_sm, y_train_sm = smt.fit_resample(X_train, y_train)
+print("Before OverSampling, counts of label '1': {}".format(sum(y_train_sm == 1)))
+print("Before OverSampling, counts of label '0': {} \n".format(sum(y_train_sm == 0)))
+df.columns
+
+
+# #  Logistic Regression:
+
+# In[143]:
+
+
+modelLogistic = LogisticRegression()
+modelLogistic.fit(X_train_sm,y_train_sm)
+
+
+# In[144]:
+
+
+#Make prediction for the test data
+y_pred= modelLogistic.predict(X_test)
+
+
+# In[145]:
+
+
+ConfusionMatrix = confusion_matrix(y_test, y_pred)
+print(ConfusionMatrix)
+
+
+# In[146]:
+
+
+
+TP= ConfusionMatrix[1,1] #True positive
+TN= ConfusionMatrix[0,0] #True negative
+FP_and_FN= ConfusionMatrix[0,1] + ConfusionMatrix[1,0]
+Total=len(y_test)
+    
+print("Confusion Matrix:\n",confusion_matrix(y_test,y_pred))
+print("\nAccuracy Score:",accuracy_score(y_test,y_pred)*100,"%")
+print("\nPrecision Score:",precision_score(y_test,y_pred)*100,"%")
+print("\nRecall Score:",recall_score(y_test,y_pred)*100,"%")
+print("\nf1_score:", (2*TP)/(2*TP + FP_and_FN))
+#calculate AUC of model
+auc = metrics.roc_auc_score(y_test, y_pred)
+
+#print AUC score
+print("\nAUC ROC:" ,auc)
+   
+print('*'*30)
+    
+fpr, tpr, _ = metrics.roc_curve(y_test,  y_pred)
+    
+
+#create ROC curve
+plt.plot(fpr,tpr)
+plt.ylabel('True Positive Rate')
+plt.xlabel('False Positive Rate')
+plt.show()
+
+
+
+# In[147]:
+
+
+#Using statsmodels package to obtian the model
+import statsmodels.api as sm
+X_train = sm.add_constant(X_train_sm)
+logit_model=sm.Logit(y_train_sm,X_train_sm)
+result=logit_model.fit()
+print("The intercept b0= ", modelLogistic.intercept_)
+print(result.summary())
+
+
+# # Other ML Algorithms
+
+# In[148]:
+
+
+ML_algos = [
+    #Ensemble Methods
+    ensemble.AdaBoostClassifier(),
+    ensemble.BaggingClassifier(),
+    ensemble.GradientBoostingClassifier(),
+    ensemble.RandomForestClassifier()
+    ]
+     
+
+
+# In[149]:
+
+
+for alg in ML_algos:
+    model = alg  
+    model.fit(X_train_sm, y_train_sm )  
+    y_pred = model.predict(X_test)
+    print(model)
+    print("-"*20)
+    ConfusionMatrix= confusion_matrix(y_test, y_pred)
+    TP= ConfusionMatrix[1,1] #True positive
+    TN= ConfusionMatrix[0,0] #True negative
+    FP_and_FN= ConfusionMatrix[0,1] + ConfusionMatrix[1,0]
+    Total=len(y_test)
+    
+    print("Confusion Matrix:\n",confusion_matrix(y_test,y_pred))
+    print("\nAccuracy Score:",accuracy_score(y_test,y_pred)*100,"%")
+    print("\nPrecision Score:",precision_score(y_test,y_pred)*100,"%")
+    print("\nRecall Score:",recall_score(y_test,y_pred)*100,"%")
+    print("\nf1_score:", (2*TP)/(2*TP + FP_and_FN))
+    #calculate AUC of model
+    auc = metrics.roc_auc_score(y_test, y_pred)
+
+    #print AUC score
+    print("\nAUC ROC:" ,auc)
+   
+    print('*'*30)
+    
+    
+    fpr, tpr, _ = metrics.roc_curve(y_test,  y_pred)
+    
+
+    #create ROC curve
+    plt.plot(fpr,tpr)
+    plt.ylabel('True Positive Rate')
+    plt.xlabel('False Positive Rate')
+    plt.show()
+    
+
+
+# In[150]:
+
+
+model = XGBClassifier()  #KNeighborsClassifier()
+model.fit(X_train_sm, y_train_sm)
+print(model)
+
+# make predictions for test data
+y_pred = model.predict(X_test)
+predictions = [round(value) for value in y_pred]
+
+
+# evaluate predictions
+print('XgBoost')
+print("-"*20)
+ConfusionMatrix= confusion_matrix(y_test, y_pred)
+TP= ConfusionMatrix[1,1] #True positive
+TN= ConfusionMatrix[0,0] #True negative
+FP_and_FN= ConfusionMatrix[0,1] + ConfusionMatrix[1,0]
+Total=len(y_test)
+print("Confusion Matrix:\n",confusion_matrix(y_test,y_pred))
+print("\nAccuracy Score:",accuracy_score(y_test,y_pred)*100,"%")
+print("\nPrecision Score:",precision_score(y_test,y_pred)*100,"%")
+print("\nRecall Score:",recall_score(y_test,y_pred)*100,"%")
+print("\nf1_score:", (2*TP)/(2*TP + FP_and_FN))
+
+#calculate AUC of model
+auc = metrics.roc_auc_score(y_test, y_pred)
+
+#print AUC score
+print("\nAUC ROC:" ,auc)
+   
+print('*'*30)
+    
+    
+fpr, tpr, _ = metrics.roc_curve(y_test,  y_pred)
+    
+
+#create ROC curve
+plt.plot(fpr,tpr)
+plt.ylabel('True Positive Rate')
+plt.xlabel('False Positive Rate')
+plt.show()
+
+
+# In[151]:
+
+
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn import metrics
+#We are going to run it for k = 1 to 15 and will be recording testing accuracy, plotting it, showing confusion matrix and classification report:
+range_k = range(1,15)
+scores = {}
+scores_list = []
+for k in range_k:
+   classifier = KNeighborsClassifier(n_neighbors=k)
+   classifier.fit(X_train_sm, y_train_sm)
+   y_pred = classifier.predict(X_test)
+   scores[k] = metrics.accuracy_score(y_test,y_pred)
+   scores_list.append(metrics.accuracy_score(y_test,y_pred))
+result = metrics.confusion_matrix(y_test, y_pred)
+print("Confusion Matrix:")
+print(result)
+result1 = metrics.classification_report(y_test, y_pred)
+print("Classification Report:",)
+print (result1)
+
+
+# In[152]:
+
+
+from sklearn.tree import DecisionTreeClassifier
+
+# Create Decision Tree classifer object
+clf = DecisionTreeClassifier()
+
+# Train Decision Tree Classifer
+clf = clf.fit(X_train_sm, y_train_sm)
+
+#Predict the response for test dataset
+y_pred = clf.predict(X_test)
+
+
+
+# evaluate predictions
+print(clf)
+print("-"*20)
+ConfusionMatrix= confusion_matrix(y_test, y_pred)
+TP= ConfusionMatrix[1,1] #True positive
+TN= ConfusionMatrix[0,0] #True negative
+FP_and_FN= ConfusionMatrix[0,1] + ConfusionMatrix[1,0]
+Total=len(y_test)
+print("Confusion Matrix:\n",confusion_matrix(y_test,y_pred))
+print("\nAccuracy Score:",accuracy_score(y_test,y_pred)*100,"%")
+print("\nPrecision Score:",precision_score(y_test,y_pred)*100,"%")
+print("\nRecall Score:",recall_score(y_test,y_pred)*100,"%")
+print("\nf1_score:", (2*TP)/(2*TP + FP_and_FN))
+
+#calculate AUC of model
+auc = metrics.roc_auc_score(y_test, y_pred)
+
+#print AUC score
+print("\nAUC ROC:" ,auc)
+   
+print('*'*30)
+    
+    
+fpr, tpr, _ = metrics.roc_curve(y_test,  y_pred)
+    
+
+#create ROC curve
+plt.plot(fpr,tpr)
+plt.ylabel('True Positive Rate')
+plt.xlabel('False Positive Rate')
+plt.show()
+
