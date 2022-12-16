@@ -46,13 +46,13 @@ warnings.filterwarnings('ignore')
 
 
 df= pd.read_excel("/Users/saptarshichakraberty/Downloads/CaseSTudy_2_data.xlsx")
-print(df.shape) # 49420 datapoints with 17 independent variables and Lead _Form_submission as target#
+print(df.shape) 
 
 print(df.columns)
 df.head(5)
 
 
-# In[120]:
+
 
 
 print(df.info()) # object: Channel_Grouping (Paid Search for all, *drop),  device_category, non_shopper, user_type #
@@ -71,7 +71,7 @@ print("Number of null values in the data set are - ",df.isnull().values.any().su
 # In[122]:
 
 
-print(df['Lead _Form_submission'].value_counts())  #0: 47615, 1: 1805 #
+print(df['Lead _Form_submission'].value_counts())  #Y= 0: 47615, 1: 1805 #
 
 print(df['device_category'].value_counts()) #device_category (Desktop: 26938, Mobile: 20253, Tablet: 2229)
 print(df['non_shopper'].value_counts()) # non_shopper (Y: 3556, N: 45864)
