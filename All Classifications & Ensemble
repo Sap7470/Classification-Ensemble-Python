@@ -3,7 +3,7 @@
 
 # # Importing Packages
 
-# In[118]:
+
 
 
 #! python3 -m pip install libsvm-official
@@ -15,21 +15,29 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 
-from sklearn import svm, tree, linear_model, neighbors, naive_bayes, ensemble, discriminant_analysis, gaussian_process
+from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
 from sklearn import feature_selection
 from sklearn import model_selection
+from sklearn.model_selection import train_test_split
+import statsmodels.api as sm
+
+
+
 from sklearn.linear_model import LogisticRegression
+from sklearn import svm, tree, linear_model, neighbors, naive_bayes, ensemble, discriminant_analysis, gaussian_process
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.svm import SVC
+from xgboost import XGBClassifier
 
 from sklearn.neural_network import MLPClassifier
 
 from sklearn import metrics
 from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
-from sklearn.model_selection import train_test_split
-from xgboost import XGBClassifier
+
+
 
 
 get_ipython().run_line_magic('matplotlib', 'inline')
@@ -41,8 +49,6 @@ warnings.filterwarnings('ignore')
 
 
 # # Data Loading and Exploration
-
-# In[119]:
 
 
 df= pd.read_excel("/Users/saptarshichakraberty/Downloads/CaseSTudy_2_data.xlsx")
@@ -61,14 +67,9 @@ df.describe()
 
 # # Checking Missing Values
 
-# In[121]:
-
 
 print("Number of null values in the data set are - ",df.isnull().values.any().sum())
 # No Missing Values
-
-
-# In[122]:
 
 
 print(df['Lead _Form_submission'].value_counts())  #Y= 0: 47615, 1: 1805 #
@@ -120,9 +121,6 @@ print(df[df['Lead _Form_submission']== 1]['device_category'].value_counts())#0: 
 
 # Adding an extra derived column: deciles of avg_time_on_page
 
-# In[125]:
-
-
 df['avg_time_deciles']= pd.cut(df['avg_time_on_page'], 10, labels = False)
 print(df['avg_time_deciles'].value_counts())
 
@@ -133,9 +131,6 @@ df[df['avg_time_deciles']==0]['user_type'].value_counts()
 
 
 # Adding an extra derived column: deciles of Avg_Session_Duration
-
-# In[126]:
-
 
 df['avg_session_deciles']= pd.cut(df['Avg_Session_Duration'], 10, labels = False)
 print(df['avg_session_deciles'].value_counts())
@@ -149,9 +144,6 @@ df.columns
 
 # # Removing extreme values
 
-# In[127]:
-
-
 ## Ref: Pivot Tables (~99% of the data for upto decile 3 in all categories of devices
 ## for both avg_session_deciles and 'avg_time_deciles'
 df_up= df[(df['avg_session_deciles'].isin([0,1,2])) & (df['avg_time_deciles'].isin([0,1,2]))] 
@@ -162,15 +154,9 @@ df_up.shape # (49215, 16); 99.59% of the total data point retained #
 
 # Dropping the deciles
 
-# In[128]:
-
-
 df_final= df_up.drop(['avg_session_deciles','avg_time_deciles'], axis= 1)
 print(df_final.shape) # (49316, 14) #
 df_final['Lead _Form_submission'].value_counts() # 0s: 47449, 1s: 1766 , initially 1s: 1805
-
-
-# In[129]:
 
 
 df= df_final
@@ -184,8 +170,6 @@ sns.heatmap(df.corr(),
 # # Hypotheses Testings (For Future Research)
 
 # Testing equality of Means:
-
-# In[130]:
 
 
 print(df_final[df_final['Lead _Form_submission']== 0]['Avg_Session_Duration'].mean()) 
@@ -221,7 +205,7 @@ print(df_final[df_final['Lead _Form_submission']== 1]['user_type'].value_counts(
 
 # Final data missing value check:
 
-# In[134]:
+
 
 
 print("Number of null values in the data set are - ",df.isnull().values.any().sum())
@@ -229,7 +213,7 @@ print("Number of null values in the data set are - ",df.isnull().values.any().su
 
 # Encoding Object variables 
 
-# In[135]:
+
 
 
 #CONVERT: convert objects to category using Label Encoder for train and test/validation dataset
@@ -244,7 +228,7 @@ df.sample(10)
 
 # # Transforming variables:
 
-# In[136]:
+
 
 
 sns.distplot(df.Avg_Session_Duration,bins=20) ## Right-skewed #
@@ -398,7 +382,6 @@ plt.show()
 
 
 #Using statsmodels package to obtian the model
-import statsmodels.api as sm
 X_train = sm.add_constant(X_train_sm)
 logit_model=sm.Logit(y_train_sm,X_train_sm)
 result=logit_model.fit()
@@ -463,8 +446,8 @@ for alg in ML_algos:
 
 # In[150]:
 
-
-model = XGBClassifier()  #KNeighborsClassifier()
+#XG Boost
+model = XGBClassifier()  
 model.fit(X_train_sm, y_train_sm)
 print(model)
 
@@ -509,8 +492,8 @@ plt.show()
 # In[151]:
 
 
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn import metrics
+
+
 #We are going to run it for k = 1 to 15 and will be recording testing accuracy, plotting it, showing confusion matrix and classification report:
 range_k = range(1,15)
 scores = {}
@@ -532,7 +515,7 @@ print (result1)
 # In[152]:
 
 
-from sklearn.tree import DecisionTreeClassifier
+
 
 # Create Decision Tree classifer object
 clf = DecisionTreeClassifier()
